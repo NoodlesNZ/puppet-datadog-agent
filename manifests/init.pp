@@ -44,6 +44,9 @@
 #   $log_to_syslog
 #       Set value of 'log_to_syslog' variable. Default is true -> yes as in dd-agent.
 #       Valid values here are: true or false.
+#   $log_to_console
+#       Set value of 'log_to_console' variable. Default is true.
+#       Valid values here are: true or false.
 #   $dogstatsd_port
 #       Set value of the 'dogstatsd_port' variable. Defaultis 8125.
 #   $statsd_forward_host
@@ -216,6 +219,7 @@ class datadog_agent(
   $dogstreams = [],
   $log_level = 'info',
   $log_to_syslog = true,
+  $log_to_console = true,
   $service_ensure = 'running',
   $service_enable = true,
   $manage_repo = true,
@@ -311,6 +315,7 @@ class datadog_agent(
   validate_legacy(String, 'validate_string', $puppetmaster_user)
   validate_legacy(Boolean, 'validate_bool', $non_local_traffic)
   validate_legacy(Boolean, 'validate_bool', $log_to_syslog)
+  validate_legacy(Boolean, 'validate_bool', $log_to_console)
   validate_legacy(Boolean, 'validate_bool', $manage_repo)
   validate_legacy(String, 'validate_string', $log_level)
   validate_legacy(String, 'validate_re', $_dogstatsd_port, '^\d*$')
@@ -616,6 +621,8 @@ class datadog_agent(
       'dogstatsd_non_local_traffic' => $non_local_traffic,
       'log_file' => $agent6_log_file,
       'log_level' => $log_level,
+      'log_to_syslog' => $log_to_syslog,
+      'log_to_console' => $log_to_console,
       'tags' => unique(flatten(union($_local_tags, $_facts_tags))),
     }
 

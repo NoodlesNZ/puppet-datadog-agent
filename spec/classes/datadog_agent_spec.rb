@@ -896,6 +896,12 @@ describe 'datadog_agent' do
               'content' => /^log_level: info\n/,
               )}
               it { should contain_file('/etc/datadog-agent/datadog.yaml').with(
+              'content' => /^log_to_syslog: true\n/,
+              )}
+              it { should contain_file('/etc/datadog-agent/datadog.yaml').with(
+              'content' => /^log_to_console: true\n/,
+              )}
+              it { should contain_file('/etc/datadog-agent/datadog.yaml').with(
               'content' => /^apm_config:\n/,
               )}
               it { should contain_file('/etc/datadog-agent/datadog.yaml').with(
