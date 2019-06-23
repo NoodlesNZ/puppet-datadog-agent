@@ -31,7 +31,8 @@ class datadog_agent::integrations::apache (
   $username               = undef,
   $password               = undef,
   $tags                   = [],
-  $disable_ssl_validation = false
+  $disable_ssl_validation = false,
+  $tls_ignore_warning     = false,
 ) inherits datadog_agent::params {
   include datadog_agent
 
