@@ -3,10 +3,6 @@
 # This class contains the parameters for the Datadog module
 #
 # Parameters:
-#   $api_key:
-#       Your DataDog API Key. Please replace with your key value
-#   $dd_url
-#       The URL to the DataDog application.
 #
 # Actions:
 #
@@ -15,6 +11,7 @@
 # Sample Usage:
 #
 class datadog_agent::params {
+  $datadog_site                   = 'datadoghq.com'
   $agent5_enable                  = false
   $conf_dir                       = '/etc/dd-agent/conf.d'
   $conf6_dir                      = '/etc/datadog-agent/conf.d'
@@ -25,6 +22,7 @@ class datadog_agent::params {
   $service_name                   = 'datadog-agent'
   $agent_version                  = 'latest'
   $dogapi_version                 = 'installed'
+  $gem_provider                   = 'puppetserver_gem'
   $conf_dir_purge                 = false
   $apt_default_release            = 'stable'
   $apm_default_enabled            = false
@@ -33,6 +31,9 @@ class datadog_agent::params {
   $process_default_custom_words   = []
   $logs_enabled                   = false
   $container_collect_all          = false
+  $use_apt_backup_keyserver       = false
+  $apt_backup_keyserver           = 'hkp://pool.sks-keyservers.net:80'
+  $apt_keyserver                  = 'hkp://keyserver.ubuntu.com:80'
 
   case $::operatingsystem {
     'Ubuntu','Debian' : {

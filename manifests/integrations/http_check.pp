@@ -12,6 +12,13 @@
 #   timeout
 #       The (optional) timeout in seconds.
 #
+#   method
+#    	The (optional) HTTP method. This setting defaults to GET, though many
+#    	other HTTP methods are supported, including POST and PUT.
+#   data
+#       The (optional) data option. Data should be a string or an array of
+#       'key: value' pairs and will be sent in the body of the request.
+#
 #   username
 #   password
 #       If your service uses basic authentication, you can optionally
@@ -22,6 +29,11 @@
 #       The (optional) window and threshold parameters allow you to trigger
 #       alerts only if the check fails x times within the last y attempts
 #       where x is the threshold and y is the window.
+#
+#   reverse_content_match
+#       When (optional) true, reverses the behavior of the content_match option, 
+#       i.e. the HTTP check will report as DOWN if the string or expression 
+#       in content_match IS found. (default is false)
 #
 #   content_match
 #       The (optional) content_match parameter will allow the check
@@ -82,10 +94,10 @@
 #       service check regardless of the value of disable_ssl_validation
 #
 #   headers
-#       The (optional) headers parameter allows you to send extra headers
-#       with the request. This is useful for explicitly specifying the host
-#       header or perhaps adding headers for authorisation purposes. Note
-#       that the http client library converts all headers to lowercase.
+#       The (optional) headers parameter allows you to send extra headers with
+#       the request. Specify them like 'header-name: content'. This is useful for
+#       explicitly specifying the 'host' header or for authorisation purposes.
+#       Note that the http client library converts all headers to lowercase.
 #       This is legal according to RFC2616
 #       (See: http://tools.ietf.org/html/rfc2616#section-4.2)
 #       but may be problematic with some HTTP servers
@@ -154,9 +166,12 @@ class datadog_agent::integrations::http_check (
   $username  = undef,
   $password  = undef,
   $timeout   = 1,
+  $method    = 'get',
+  $data      = undef,
   $threshold = undef,
   $window    = undef,
   $content_match = undef,
+  $reverse_content_match = false,
   $include_content = false,
   $http_response_status_code = undef,
   $collect_response_time = true,
@@ -182,9 +197,12 @@ class datadog_agent::integrations::http_check (
       'username'                     => $username,
       'password'                     => $password,
       'timeout'                      => $timeout,
+      'method'                       => $method,
+      'data'                         => $data,
       'threshold'                    => $threshold,
       'window'                       => $window,
       'content_match'                => $content_match,
+      'reverse_content_match'        => $reverse_content_match,
       'include_content'              => $include_content,
       'http_response_status_code'    => $http_response_status_code,
       'collect_response_time'        => $collect_response_time,
@@ -206,10 +224,24 @@ class datadog_agent::integrations::http_check (
     $_instances = $instances
   }
 
+  $legacy_dst = "${datadog_agent::conf_dir}/http_check.yaml"
   if !$::datadog_agent::agent5_enable {
-    $dst = "${datadog_agent::conf6_dir}/http_check.yaml"
+    $dst_dir = "${datadog_agent::conf6_dir}/http_check.d"
+    file { $legacy_dst:
+      ensure => 'absent'
+    }
+
+    file { $dst_dir:
+      ensure  => directory,
+      owner   => $datadog_agent::params::dd_user,
+      group   => $datadog_agent::params::dd_group,
+      mode    => '0755',
+      require => Package[$datadog_agent::params::package_name],
+      notify  => Service[$datadog_agent::params::service_name]
+    }
+    $dst = "${dst_dir}/conf.yaml"
   } else {
-    $dst = "${datadog_agent::conf_dir}/http_check.yaml"
+    $dst = $legacy_dst
   }
 
   file { $dst:

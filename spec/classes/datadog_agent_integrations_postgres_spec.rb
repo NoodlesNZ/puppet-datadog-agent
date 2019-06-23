@@ -3,12 +3,12 @@ require 'spec_helper'
 describe 'datadog_agent::integrations::postgres' do
   context 'supported agents - v5 and v6' do
     agents = { '5' => true, '6' => false }
-    agents.each do |_, enabled|
-      let(:pre_condition) { "class {'::datadog_agent': agent5_enable => #{enabled}}" }
+    agents.each do |_, is_agent5|
+      let(:pre_condition) { "class {'::datadog_agent': agent5_enable => #{is_agent5}}" }
       let(:facts) {{
         operatingsystem: 'Ubuntu',
       }}
-      if enabled
+      if is_agent5
         let(:conf_dir) { '/etc/dd-agent/conf.d' }
       else
         let(:conf_dir) { '/etc/datadog-agent/conf.d' }
@@ -17,10 +17,14 @@ describe 'datadog_agent::integrations::postgres' do
       let(:dd_group) { 'root' }
       let(:dd_package) { 'datadog-agent' }
       let(:dd_service) { 'datadog-agent' }
-      let(:conf_file) { "#{conf_dir}/postgres.yaml" }
+      if is_agent5
+        let(:conf_file) { "#{conf_dir}/postgres.yaml" }
+      else
+        let(:conf_file) { "#{conf_dir}/postgres.d/conf.yaml" }
+      end
 
       context 'with default parameters' do
-        it { should_not compile }
+        it { should compile }
       end
 
       context 'with password set' do
@@ -44,11 +48,35 @@ describe 'datadog_agent::integrations::postgres' do
           it { should contain_file(conf_file).with_content(%r{port: 5432}) }
           it { should contain_file(conf_file).with_content(%r{username: datadog}) }
           it { should contain_file(conf_file).without_content(%r{^\s*use_psycopg2: }) }
+          it { should contain_file(conf_file).with_content(%r{collect_function_metrics: false}) }
+          it { should contain_file(conf_file).with_content(%r{collect_count_metrics: false}) }
+          it { should contain_file(conf_file).with_content(%r{collect_activity_metrics: false}) }
+          it { should contain_file(conf_file).with_content(%r{collect_database_size_metrics: false}) }
+          it { should contain_file(conf_file).with_content(%r{collect_default_database: false}) }
           it { should contain_file(conf_file).without_content(%r{tags: })}
           it { should contain_file(conf_file).without_content(%r{^[^#]*relations: }) }
         end
 
-        context 'with use_psycopg2 enabled' do
+        context 'with extra metrics collection is_agent5' do
+          let(:params) {{
+            password: 'abc123',
+            collect_function_metrics: true,
+            collect_count_metrics: true,
+            collect_activity_metrics: true,
+            collect_database_size_metrics: true,
+            collect_default_database: true,
+          }}
+          it {
+            should contain_file(conf_file)
+              .with_content(%r{collect_function_metrics: true})
+              .with_content(%r{collect_count_metrics: true})
+              .with_content(%r{collect_activity_metrics: true})
+              .with_content(%r{collect_database_size_metrics: true})
+              .with_content(%r{collect_default_database: true})
+          }
+        end
+
+        context 'with use_psycopg2 is_agent5' do
           let(:params) {{
             use_psycopg2: true,
             password: 'abc123',

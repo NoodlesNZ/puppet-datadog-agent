@@ -690,6 +690,27 @@ describe 'datadog_agent' do
                     'order' => '07',
                 )}
             end
+            context 'with apm_enabled and apm_analyzed_spans set' do
+                let(:params) {{ :apm_enabled  => true,
+                                :agent5_enable => true,
+                                :apm_analyzed_spans => {
+                                    'foo|bar' => 0.5,
+                                    'haz|qux' => 0.1
+                                },
+                }}
+                it { should contain_concat__fragment('datadog footer').with(
+                    'content' => /^apm_enabled: true\n/,
+                )}
+                it { should contain_concat__fragment('datadog apm footer').with(
+                    'content' => /^\[trace.analyzed_spans\]\n/,
+                )}
+                it { should contain_concat__fragment('datadog apm footer').with(
+                    'content' => /^\[trace.analyzed_spans\]\nfoo|bar: 0.5\nhaz|qux: 0.1/,
+                )}
+                it { should contain_concat__fragment('datadog apm footer').with(
+                    'order' => '07',
+                )}
+            end
             context 'with service_discovery enabled' do
                 let(:params) {{ :service_discovery_backend  => 'docker',
                                 :sd_config_backend          => 'etcd',
@@ -833,7 +854,20 @@ describe 'datadog_agent' do
         end
 
         if DEBIAN_OS.include?(operatingsystem)
-          it { should contain_class('datadog_agent::ubuntu::agent5') }
+          it do
+            should contain_class('datadog_agent::ubuntu::agent5')\
+                .with_apt_keyserver('hkp://keyserver.ubuntu.com:80')
+          end
+          context 'use backup keyserver' do
+            let(:params) {{
+                :use_apt_backup_keyserver => true,
+                :agent5_enable => true,
+            }}
+            it do
+                should contain_class('datadog_agent::ubuntu::agent5')\
+                    .with_apt_keyserver('hkp://pool.sks-keyservers.net:80')
+            end
+          end
         elsif REDHAT_OS.include?(operatingsystem)
           it { should contain_class('datadog_agent::redhat::agent5') }
         end
@@ -881,7 +915,10 @@ describe 'datadog_agent' do
               'content' => /^collect_ec2_tags: false\n/,
               )}
               it { should contain_file('/etc/datadog-agent/datadog.yaml').with(
-              'content' => /^dd_url: \"{0,1}https:\/\/app.datadoghq.com\"{0,1}\n/,
+              'content' => /^dd_url: ''\n/,
+              )}
+              it { should contain_file('/etc/datadog-agent/datadog.yaml').with(
+                'content' => /^site: datadoghq.com\n/,
               )}
               it { should contain_file('/etc/datadog-agent/datadog.yaml').with(
               'content' => /^enable_metadata_collection: true\n/,
@@ -951,6 +988,14 @@ describe 'datadog_agent' do
               )}
               it { should contain_file('/etc/datadog-agent/datadog.yaml').with(
               'content' => /^collect_ec2_tags: true\n/,
+              )}
+            end
+            context 'datadog EU' do
+              let(:params) {{
+                  :datadog_site => 'datadoghq.eu',
+              }}
+              it { should contain_file('/etc/datadog-agent/datadog.yaml').with(
+              'content' => /^site: datadoghq.eu\n/,
               )}
             end
             context 'forward statsd settings set' do
@@ -1047,6 +1092,25 @@ describe 'datadog_agent' do
               )}
               it { should contain_file('/etc/datadog-agent/datadog.yaml').with(
               'content' => /^\ \ apm_non_local_traffic: true\n/,
+              )}
+            end
+
+            context 'with apm_enabled set to true and apm_analyzed_spans specified' do
+              let(:params) {{
+                  :apm_enabled  => true,
+                  :apm_analyzed_spans => {
+                      'foo|bar' => 0.5,
+                      'haz|qux' => 0.1
+                  },
+              }}
+              it { should contain_file('/etc/datadog-agent/datadog.yaml').with(
+              'content' => /^apm_config:\n/,
+              )}
+              it { should contain_file('/etc/datadog-agent/datadog.yaml').with(
+              'content' => /^apm_config:\n\ \ enabled: true\n/,
+              )}
+              it { should contain_file('/etc/datadog-agent/datadog.yaml').with(
+              'content' => /^\ \ analyzed_spans:\n\ \ \ \ foo|bar: 0.5\n\ \ \ \ haz|qux: 0.1\n/,
               )}
             end
             context 'with extra_options and Process enabled' do

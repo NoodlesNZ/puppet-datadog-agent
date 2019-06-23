@@ -31,20 +31,32 @@ class datadog_agent::integrations::apache (
   $username               = undef,
   $password               = undef,
   $tags                   = [],
-  $disable_ssl_validation = false,
-  $ignore_ssl_warning     = false
+  $disable_ssl_validation = false
 ) inherits datadog_agent::params {
   include datadog_agent
 
   validate_legacy('String', 'validate_string', $url)
   validate_legacy('Array', 'validate_array', $tags)
   validate_legacy('Boolean', 'validate_bool', $disable_ssl_validation)
-  validate_legacy('Boolean', 'validate_bool', $ignore_ssl_warning)
 
+  $legacy_dst = "${datadog_agent::conf_dir}/apache.yaml"
   if !$::datadog_agent::agent5_enable {
-    $dst = "${datadog_agent::conf6_dir}/apache.yaml"
+    $dst_dir = "${datadog_agent::conf6_dir}/apache.d"
+    file { $legacy_dst:
+      ensure => 'absent'
+    }
+
+    file { $dst_dir:
+      ensure  => directory,
+      owner   => $datadog_agent::params::dd_user,
+      group   => $datadog_agent::params::dd_group,
+      mode    => '0755',
+      require => Package[$datadog_agent::params::package_name],
+      notify  => Service[$datadog_agent::params::service_name]
+    }
+    $dst = "${dst_dir}/conf.yaml"
   } else {
-    $dst = "${datadog_agent::conf_dir}/apache.yaml"
+    $dst = $legacy_dst
   }
 
   file { $dst:

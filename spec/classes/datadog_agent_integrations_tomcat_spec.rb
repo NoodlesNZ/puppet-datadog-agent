@@ -3,12 +3,12 @@ require 'spec_helper'
 describe 'datadog_agent::integrations::tomcat' do
   context 'supported agents - v5 and v6' do
     agents = { '5' => true, '6' => false }
-    agents.each do |_, enabled|
-      let(:pre_condition) { "class {'::datadog_agent': agent5_enable => #{enabled}}" }
+    agents.each do |_, is_agent5|
+      let(:pre_condition) { "class {'::datadog_agent': agent5_enable => #{is_agent5}}" }
       let(:facts) {{
         operatingsystem: 'Ubuntu',
       }}
-      if enabled
+      if is_agent5
         let(:conf_dir) { '/etc/dd-agent/conf.d' }
       else
         let(:conf_dir) { '/etc/datadog-agent/conf.d' }
@@ -17,7 +17,11 @@ describe 'datadog_agent::integrations::tomcat' do
       let(:dd_group) { 'root' }
       let(:dd_package) { 'datadog-agent' }
       let(:dd_service) { 'datadog-agent' }
-      let(:conf_file) { "#{conf_dir}/tomcat.yaml" }
+      if is_agent5
+        let(:conf_file) { "#{conf_dir}/tomcat.yaml" }
+      else
+        let(:conf_file) { "#{conf_dir}/tomcat.d/conf.yaml" }
+      end
 
       it { should compile.with_all_deps }
       it { should contain_file(conf_file).with(
@@ -61,6 +65,19 @@ describe 'datadog_agent::integrations::tomcat' do
         it { should contain_file(conf_file).with_content(%r{trust_store_path: /var/lib/tomcat/trust_store_path}) }
         it { should contain_file(conf_file).with_content(%r{trust_store_password: hunter2}) }
         it { should contain_file(conf_file).with_content(%r{tags:\s+foo: bar\s+baz: bat}) }
+      end
+
+      context 'with jmx_url parameter set' do
+        let(:params) {{
+          hostname: 'tomcat1',
+          jmx_url: 'service:jmx:rmi:///jndi/rmi://tomcat.foo:9999/custompath',
+          username: 'userfoo',
+          password: 'passbar',
+        }}
+        it { should contain_file(conf_file).with_content(%r{host: tomcat1}) }
+        it { should contain_file(conf_file).with_content(%r{jmx_url: "service:jmx:rmi:///jndi/rmi://tomcat.foo:9999/custompath"}) }
+        it { should contain_file(conf_file).with_content(%r{user: userfoo}) }
+        it { should contain_file(conf_file).with_content(%r{password: passbar}) }
       end
     end
   end

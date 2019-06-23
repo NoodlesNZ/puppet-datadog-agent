@@ -1,12 +1,11 @@
+### MANAGED BY PUPPET
+
 init_config:
 
 instances:
     -   apache_status_url: <%= @url %>
 <% if @disable_ssl_validation -%>
         disable_ssl_validation: <%= @disable_ssl_validation %>
-<% end -%>
-<% if @ignore_ssl_warning -%>
-        ignore_ssl_warning: <%= @ignore_ssl_warning %>
 <% end -%>
 <% if @username -%>
         apache_user: <%= @username %>
@@ -22,3 +21,4 @@ instances:
     <%- end -%>
   <%- end -%>
 <% end -%>
+

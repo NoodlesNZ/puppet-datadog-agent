@@ -6,11 +6,19 @@
 #   $dd_url:
 #       The host of the Datadog intake server to send agent data to.
 #       Defaults to https://app.datadoghq.com.
+#   $datadog_site:
+#       The site of the Datadog intake to send Agent data to. Defaults to 'datadoghq.com',
+#       set to 'datadoghq.eu' to send data to the EU site.
+#       This option is only available with agent version >= 6.6.0.
 #   $host:
+#       Force the hostname to whatever you want. (default: auto-detected)
 #   $api_key:
 #       Your DataDog API Key. Please replace with your key value.
 #   $collect_ec2_tags
 #       Collect AWS EC2 custom tags as agent tags.
+#       Boolean. Default: false
+#   $collect_gce_tags
+#       Collect Google Cloud Engine metadata as agent tags.
 #       Boolean. Default: false
 #   $collect_instance_metadata
 #       The Agent will try to collect instance metadata for EC2 and GCE instances.
@@ -41,6 +49,12 @@
 #       Instead of reporting the puppet nodename, use this regex to extract the named
 #       'hostname' captured group to report the run in Datadog.
 #       ex.: '^(?<hostname>.*\.datadoghq\.com)(\.i-\w{8}\..*)?$'
+#   $hostname_fqdn
+#       Make the agent use "hostname -f" on unix-based systems as a last resort
+#       way of determining the hostname instead of Golang "os.Hostname()"
+#       This will be enabled by default in version 6.6
+#       More information at  https://dtdg.co/flag-hostname-fqdn
+#       Optional: Valid values here are: true or false.
 #   $log_to_syslog
 #       Set value of 'log_to_syslog' variable. Default is true -> yes as in dd-agent.
 #       Valid values here are: true or false.
@@ -168,6 +182,10 @@
 #       String. Default: non
 #   $apm_non_local_traffic
 #       Accept non local apm traffic. Defaults to false.
+#       Boolean. Default: false
+#   $apm_analyzed_spans
+#       Hash defining the APM spans to analyze and their rates.
+#       Optional Hash. Default: undef.
 #   $process_enabled
 #       String to enable the process/container agent
 #       Boolean. Default: false
@@ -183,6 +201,9 @@
 #   $container_collect_all
 #       Boolean to enable logs collection for all containers
 #       Boolean. Default: false
+#   $cmd_port
+#       The port on which the IPC api listens
+#       Integer. Default: 5001
 #
 # Actions:
 #
@@ -203,10 +224,12 @@
 #
 #
 class datadog_agent(
-  $dd_url = 'https://app.datadoghq.com',
+  $dd_url = '',
+  $datadog_site = $datadog_agent::params::datadog_site,
   $host = '',
   $api_key = 'your_API_key',
   $collect_ec2_tags = false,
+  $collect_gce_tags = false,
   $collect_instance_metadata = true,
   $tags = [],
   $integrations = {},
@@ -215,6 +238,7 @@ class datadog_agent(
   $facts_to_tags = [],
   $puppet_run_reports = false,
   $puppetmaster_user = $settings::user,
+  String $puppet_gem_provider = $datadog_agent::params::gem_provider,
   $non_local_traffic = false,
   $dogstreams = [],
   $log_level = 'info',
@@ -223,16 +247,17 @@ class datadog_agent(
   $service_ensure = 'running',
   $service_enable = true,
   $manage_repo = true,
-  $hostname_extraction_regex = nil,
+  $hostname_extraction_regex = undef,
+  $hostname_fqdn = false,
   $dogstatsd_port = 8125,
   $dogstatsd_socket = '',
   $statsd_forward_host = '',
   $statsd_forward_port = '',
   $statsd_histogram_percentiles = '0.95',
-  $proxy_host = '',
-  $proxy_port = '',
-  $proxy_user = '',
-  $proxy_password = '',
+  Optional[String] $proxy_host = undef,
+  Optional[Variant[Integer, Pattern[/^\d*$/]]] $proxy_port = undef,
+  Optional[String] $proxy_user = undef,
+  Optional[String] $proxy_password = undef,
   $graphite_listen_port = '',
   $extra_template = '',
   $ganglia_host = '',
@@ -268,6 +293,7 @@ class datadog_agent(
   $sd_template_dir = '',
   $sd_jmx_enable = false,
   $consul_token = '',
+  $cmd_port = 5001,
   $agent5_enable = $datadog_agent::params::agent5_enable,
   $conf_dir = $datadog_agent::params::conf_dir,
   $conf6_dir = $datadog_agent::params::conf6_dir,
@@ -280,6 +306,7 @@ class datadog_agent(
   $apm_enabled = $datadog_agent::params::apm_default_enabled,
   $apm_env = 'none',
   $apm_non_local_traffic = false,
+  Optional[Hash[String, Float[0, 1]]] $apm_analyzed_spans = undef,
   $process_enabled = $datadog_agent::params::process_default_enabled,
   $scrub_args = $datadog_agent::params::process_default_scrub_args,
   $custom_sensitive_words = $datadog_agent::params::process_default_custom_words,
@@ -288,6 +315,9 @@ class datadog_agent(
   Hash[String[1], Data] $agent6_extra_options = {},
   $agent5_repo_uri = $datadog_agent::params::agent5_default_repo,
   $agent6_repo_uri = $datadog_agent::params::agent6_default_repo,
+  Optional[Boolean] $use_apt_backup_keyserver = $datadog_agent::params::use_apt_backup_keyserver,
+  $apt_backup_keyserver = $datadog_agent::params::apt_backup_keyserver,
+  $apt_keyserver = $datadog_agent::params::apt_keyserver,
   $apt_release = $datadog_agent::params::apt_default_release,
   Optional[String] $service_provider = undef,
   Optional[String] $agent_version = $datadog_agent::params::agent_version,
@@ -297,7 +327,6 @@ class datadog_agent(
   # lint:ignore:only_variable_string
   $_dogstatsd_port = "${dogstatsd_port}"
   $_statsd_forward_port = "${statsd_forward_port}"
-  $_proxy_port = "${proxy_port}"
   $_graphite_listen_port = "${graphite_listen_port}"
   $_listen_port = "${listen_port}"
   $_pup_port = "${pup_port}"
@@ -305,7 +334,9 @@ class datadog_agent(
   # lint:endignore
 
   validate_legacy(String, 'validate_string', $dd_url)
+  validate_legacy(String, 'validate_string', $datadog_site)
   validate_legacy(String, 'validate_string', $host)
+  validate_legacy(Boolean, 'validate_bool', $hostname_fqdn)
   validate_legacy(String, 'validate_string', $api_key)
   validate_legacy(Array, 'validate_array', $tags)
   validate_legacy(Boolean, 'validate_bool', $hiera_tags)
@@ -321,10 +352,6 @@ class datadog_agent(
   validate_legacy(String, 'validate_re', $_dogstatsd_port, '^\d*$')
   validate_legacy(String, 'validate_string', $statsd_histogram_percentiles)
   validate_legacy(String, 'validate_re', $_statsd_forward_port, '^\d*$')
-  validate_legacy(String, 'validate_string', $proxy_host)
-  validate_legacy(String, 'validate_re', $_proxy_port, '^\d*$')
-  validate_legacy(String, 'validate_string', $proxy_user)
-  validate_legacy(String, 'validate_string', $proxy_password)
   validate_legacy(String, 'validate_re', $_graphite_listen_port, '^\d*$')
   validate_legacy(String, 'validate_string', $extra_template)
   validate_legacy(String, 'validate_string', $ganglia_host)
@@ -333,6 +360,7 @@ class datadog_agent(
   validate_legacy(Boolean, 'validate_bool', $skip_apt_key_trusting)
   validate_legacy(Boolean, 'validate_bool', $use_curl_http_client)
   validate_legacy(Boolean, 'validate_bool', $collect_ec2_tags)
+  validate_legacy(Boolean, 'validate_bool', $collect_gce_tags)
   validate_legacy(Boolean, 'validate_bool', $collect_instance_metadata)
   validate_legacy(String, 'validate_string', $recent_point_threshold)
   validate_legacy(String, 'validate_re', $_listen_port, '^\d*$')
@@ -375,9 +403,10 @@ class datadog_agent(
   validate_legacy(String, 'validate_string', $agent5_repo_uri)
   validate_legacy(String, 'validate_string', $agent6_repo_uri)
   validate_legacy(String, 'validate_string', $apt_release)
+  validate_legacy(Integer, 'validate_integer', $cmd_port)
 
   if $hiera_tags {
-    $local_tags = lookup({ 'name' => 'datadog_agent::tags', 'default_value' => []})
+    $local_tags = lookup({ 'name' => 'datadog_agent::tags', 'merge' => 'unique', 'default_value' => []})
   } else {
     $local_tags = $tags
   }
@@ -400,6 +429,12 @@ class datadog_agent(
     default:    { $_loglevel = 'INFO' }
   }
 
+  if $use_apt_backup_keyserver {
+    $_apt_keyserver = $apt_backup_keyserver
+  } else {
+    $_apt_keyserver = $apt_keyserver
+  }
+
   case $::operatingsystem {
     'Ubuntu','Debian' : {
       if $agent5_enable {
@@ -411,6 +446,7 @@ class datadog_agent(
           location              => $agent5_repo_uri,
           release               => $apt_release,
           skip_apt_key_trusting => $skip_apt_key_trusting,
+          apt_keyserver         => $_apt_keyserver,
         }
       } else {
         class { 'datadog_agent::ubuntu::agent6':
@@ -421,6 +457,7 @@ class datadog_agent(
           location              => $agent6_repo_uri,
           release               => $apt_release,
           skip_apt_key_trusting => $skip_apt_key_trusting,
+          apt_keyserver         => $_apt_keyserver,
         }
       }
     }
@@ -465,6 +502,7 @@ class datadog_agent(
   }
 
   if $agent5_enable {
+
     file { '/etc/dd-agent':
       ensure  => directory,
       owner   => $dd_user,
@@ -491,6 +529,11 @@ class datadog_agent(
       require => File['/etc/dd-agent'],
     }
 
+    if ($dd_url == '') {
+      $_dd_url = 'https://app.datadoghq.com'
+    } else {
+      $_dd_url = $dd_url
+    }
     concat::fragment{ 'datadog header':
       target  => '/etc/dd-agent/datadog.conf',
       content => template('datadog_agent/datadog_header.conf.erb'),
@@ -522,7 +565,7 @@ class datadog_agent(
       }
     }
 
-    if ($apm_enabled == true) and ($apm_env != 'none') {
+    if ($apm_enabled == true) and ($apm_env != 'none') or $apm_analyzed_spans {
       concat::fragment{ 'datadog apm footer':
         target  => '/etc/dd-agent/datadog.conf',
         content => template('datadog_agent/datadog_apm_footer.conf.erb'),
@@ -542,7 +585,7 @@ class datadog_agent(
     if !empty($proxy_host) {
         notify { 'Setting proxy_host will have no effect on agent6 please use agent6_extra_options to set your proxy': }
     }
-    if !empty($_proxy_port) {
+    if !empty($proxy_port) {
         notify { 'Setting proxy_port will have no effect on agent6 please use agent6_extra_options to set your proxy': }
     }
     if !empty($proxy_user) {
@@ -580,6 +623,16 @@ class datadog_agent(
         $host_config = {}
     }
 
+    if $apm_analyzed_spans {
+        $apm_analyzed_span_config = {
+            'apm_config' => {
+                'analyzed_spans' => $apm_analyzed_spans
+            }
+        }
+    } else {
+        $apm_analyzed_span_config = {}
+    }
+
     if $statsd_forward_host != '' {
         if $_statsd_forward_port != '' {
             $statsd_forward_config = {
@@ -594,7 +647,12 @@ class datadog_agent(
     } else {
         $statsd_forward_config = {}
     }
-    $extra_config = deep_merge($base_extra_config, $agent6_extra_options, $statsd_forward_config, $host_config)
+    $extra_config = deep_merge(
+            $base_extra_config,
+            $agent6_extra_options,
+            $apm_analyzed_span_config,
+            $statsd_forward_config,
+            $host_config)
 
     file { $conf6_dir:
       ensure  => directory,
@@ -612,8 +670,11 @@ class datadog_agent(
     $_agent_config = {
       'api_key' => $api_key,
       'dd_url' => $dd_url,
-      'cmd_port' => 5001,
+      'site' => $datadog_site,
+      'cmd_port' => $cmd_port,
+      'hostname_fqdn' => $hostname_fqdn,
       'collect_ec2_tags' => $collect_ec2_tags,
+      'collect_gce_tags' => $collect_gce_tags,
       'conf_path' => $datadog_agent::params::conf6_dir,
       'enable_metadata_collection' => $collect_instance_metadata,
       'dogstatsd_port' => $dogstatsd_port,
@@ -624,6 +685,7 @@ class datadog_agent(
       'log_to_syslog' => $log_to_syslog,
       'log_to_console' => $log_to_console,
       'tags' => unique(flatten(union($_local_tags, $_facts_tags))),
+      'additional_checksd' => $additional_checksd,
     }
 
     $agent_config = deep_merge($_agent_config, $extra_config)
@@ -642,6 +704,8 @@ class datadog_agent(
   if $puppet_run_reports {
     class { 'datadog_agent::reports':
       api_key                   => $api_key,
+      datadog_site              => $datadog_site,
+      puppet_gem_provider       => $puppet_gem_provider,
       dogapi_version            => $datadog_agent::params::dogapi_version,
       puppetmaster_user         => $puppetmaster_user,
       hostname_extraction_regex => $hostname_extraction_regex,
