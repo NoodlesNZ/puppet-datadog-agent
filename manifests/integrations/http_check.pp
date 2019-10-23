@@ -31,8 +31,8 @@
 #       where x is the threshold and y is the window.
 #
 #   reverse_content_match
-#       When (optional) true, reverses the behavior of the content_match option, 
-#       i.e. the HTTP check will report as DOWN if the string or expression 
+#       When (optional) true, reverses the behavior of the content_match option,
+#       i.e. the HTTP check will report as DOWN if the string or expression
 #       in content_match IS found. (default is false)
 #
 #   content_match
@@ -45,9 +45,8 @@
 #        . ^ $ * + ? { } [ ] \ | ( )
 #
 #   include_content
-#       The (optional) collect_response_time parameter will instruct the
-#       check to create a metric 'network.http.response_time', tagged with
-#       the url, reporting the response time in seconds.
+#       When (optional) true, includes the first 200 characters of the HTTP
+#       response body in notifications. (default is false)
 #
 #   http_response_status_code
 #       The (optional) http_response_status_code parameter will instruct the check
@@ -69,6 +68,10 @@
 #       the http client to accept self signed, expired and otherwise
 #       problematic SSL server certificates. To maintain backwards
 #       compatibility this defaults to false.
+#
+#   ignore_ssl_warning
+#       When SSL certificate validation is enabled (see setting above), this
+#       setting will allow you to disable security warnings.
 #
 #   skip_event
 #       The (optional) skip_event parameter will instruct the check to not
@@ -176,6 +179,7 @@ class datadog_agent::integrations::http_check (
   $http_response_status_code = undef,
   $collect_response_time = true,
   $disable_ssl_validation = false,
+  $ignore_ssl_warning = false,
   $skip_event = true,
   $no_proxy  = false,
   $check_certificate_expiration = true,
@@ -207,6 +211,7 @@ class datadog_agent::integrations::http_check (
       'http_response_status_code'    => $http_response_status_code,
       'collect_response_time'        => $collect_response_time,
       'disable_ssl_validation'       => $disable_ssl_validation,
+      'ignore_ssl_warning'           => $ignore_ssl_warning,
       'skip_event'                   => $skip_event,
       'no_proxy'                     => $no_proxy,
       'check_certificate_expiration' => $check_certificate_expiration,
@@ -224,7 +229,7 @@ class datadog_agent::integrations::http_check (
     $_instances = $instances
   }
 
-  $legacy_dst = "${datadog_agent::conf_dir}/http_check.yaml"
+  $legacy_dst = "${datadog_agent::conf5_dir}/http_check.yaml"
   if !$::datadog_agent::agent5_enable {
     $dst_dir = "${datadog_agent::conf6_dir}/http_check.d"
     file { $legacy_dst:
@@ -235,7 +240,7 @@ class datadog_agent::integrations::http_check (
       ensure  => directory,
       owner   => $datadog_agent::params::dd_user,
       group   => $datadog_agent::params::dd_group,
-      mode    => '0755',
+      mode    => $datadog_agent::params::permissions_directory,
       require => Package[$datadog_agent::params::package_name],
       notify  => Service[$datadog_agent::params::service_name]
     }
@@ -248,7 +253,7 @@ class datadog_agent::integrations::http_check (
     ensure  => file,
     owner   => $datadog_agent::params::dd_user,
     group   => $datadog_agent::params::dd_group,
-    mode    => '0600',
+    mode    => $datadog_agent::params::permissions_protected_file,
     content => template('datadog_agent/agent-conf.d/http_check.yaml.erb'),
     require => Package[$datadog_agent::params::package_name],
     notify  => Service[$datadog_agent::params::service_name]

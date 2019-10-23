@@ -100,7 +100,7 @@
 #       String. Default: empty (port 17123 in dd-agent)
 #   $additional_checksd
 #       Additional directory to look for datadog checks in
-#       String. Default: empty
+#       String. Default: undef
 #   $bind_host
 #       The loopback address the forwarder and Dogstatsd will bind.
 #       String. Default: empty
@@ -198,6 +198,9 @@
 #   $logs_enabled
 #       Boolean to enable or disable the logs agent
 #       Boolean. Default: false
+#   $logs_open_files_limit
+#       Integer set the max number of open files for the logs agent
+#       Integer. Default: 100 if undef
 #   $container_collect_all
 #       Boolean to enable logs collection for all containers
 #       Boolean. Default: false
@@ -267,7 +270,7 @@ class datadog_agent(
   $use_curl_http_client = false,
   $recent_point_threshold = '',
   $listen_port = '',
-  $additional_checksd = '',
+  Optional[String] $additional_checksd = undef,
   $bind_host = '',
   $use_pup = false,
   $pup_port = '',
@@ -279,7 +282,7 @@ class datadog_agent(
   $dogstatsd_normalize = true,
   $device_blacklist_re = '',
   $custom_emitters = '',
-  $agent6_log_file = '/var/log/datadog/agent.log',
+  $agent6_log_file = $datadog_agent::params::agent6_log_file,
   $collector_log_file = '',
   $forwarder_log_file = '',
   $dogstatsd_log_file = '',
@@ -295,7 +298,7 @@ class datadog_agent(
   $consul_token = '',
   $cmd_port = 5001,
   $agent5_enable = $datadog_agent::params::agent5_enable,
-  $conf_dir = $datadog_agent::params::conf_dir,
+  $conf_dir = $datadog_agent::params::conf5_dir,
   $conf6_dir = $datadog_agent::params::conf6_dir,
   $conf_dir_purge = $datadog_agent::params::conf_dir_purge,
   $service_name = $datadog_agent::params::service_name,
@@ -311,6 +314,7 @@ class datadog_agent(
   $scrub_args = $datadog_agent::params::process_default_scrub_args,
   $custom_sensitive_words = $datadog_agent::params::process_default_custom_words,
   $logs_enabled = $datadog_agent::params::logs_enabled,
+  $logs_open_files_limit = $datadog_agent::params::logs_open_files_limit,
   $container_collect_all = $datadog_agent::params::container_collect_all,
   Hash[String[1], Data] $agent6_extra_options = {},
   $agent5_repo_uri = $datadog_agent::params::agent5_default_repo,
@@ -319,6 +323,8 @@ class datadog_agent(
   $apt_backup_keyserver = $datadog_agent::params::apt_backup_keyserver,
   $apt_keyserver = $datadog_agent::params::apt_keyserver,
   $apt_release = $datadog_agent::params::apt_default_release,
+  String $win_msi_location = 'C:/Windows/temp', # Temporary directory where the msi file is downloaded, must exist
+  Enum['present', 'absent'] $win_ensure = 'present', #TODO: Implement uninstall also for apt and rpm install methods
   Optional[String] $service_provider = undef,
   Optional[String] $agent_version = $datadog_agent::params::agent_version,
 ) inherits datadog_agent::params {
@@ -364,7 +370,6 @@ class datadog_agent(
   validate_legacy(Boolean, 'validate_bool', $collect_instance_metadata)
   validate_legacy(String, 'validate_string', $recent_point_threshold)
   validate_legacy(String, 'validate_re', $_listen_port, '^\d*$')
-  validate_legacy(String, 'validate_string', $additional_checksd)
   validate_legacy(String, 'validate_string', $bind_host)
   validate_legacy(Boolean, 'validate_bool', $use_pup)
   validate_legacy(String, 'validate_re', $_pup_port, '^\d*$')
@@ -482,32 +487,55 @@ class datadog_agent(
         }
       }
     }
+    'Windows' : {
+      class { 'datadog_agent::windows::agent6' :
+        baseurl        => $agent6_repo_uri,
+        agent_version  => $agent_version,
+        service_ensure => $service_ensure,
+        service_enable => $service_enable,
+        msi_location   => $win_msi_location,
+        api_key        => $api_key,
+        hostname       => $host,
+        service_name   => $service_name,
+        tags           => $local_tags,
+        ensure         => $win_ensure
+      }
+      if ($win_ensure == absent) {
+        return() #Config files will remain unchanged on uninstall
+      }
+    }
     default: { fail("Class[datadog_agent]: Unsupported operatingsystem: ${::operatingsystem}") }
   }
 
-  if ($dd_groups) {
-    user { $dd_user:
-      groups => $dd_groups,
-      notify => Service[$datadog_agent::params::service_name],
+  if ($::operatingsystem != 'Windows') {
+    if ($dd_groups) {
+      user { $dd_user:
+        groups => $dd_groups,
+        notify => Service[$datadog_agent::params::service_name],
+      }
+    }
+
+    # required by reports even in agent5 scenario
+    file { '/etc/datadog-agent':
+      ensure  => directory,
+      owner   => $dd_user,
+      group   => $dd_group,
+      mode    => $datadog_agent::params::permissions_directory,
+      require => Package[$datadog_agent::params::package_name],
     }
   }
 
-  # required by reports even in agent5 scenario
-  file { '/etc/datadog-agent':
-    ensure  => directory,
-    owner   => $dd_user,
-    group   => $dd_group,
-    mode    => '0755',
-    require => Package[$datadog_agent::params::package_name],
-  }
-
   if $agent5_enable {
+
+    if ($::operatingsystem == 'Windows') {
+      fail('Installation of agent 5 with puppet is not supported on Windows')
+    }
 
     file { '/etc/dd-agent':
       ensure  => directory,
       owner   => $dd_user,
       group   => $dd_group,
-      mode    => '0755',
+      mode    => $datadog_agent::params::permissions_directory,
       require => Package[$datadog_agent::params::package_name],
     }
 
@@ -580,7 +608,8 @@ class datadog_agent(
         order   => '08',
       }
     }
-  } else {
+  } else { #Agent 6
+
     # notify of broken params on agent6
     if !empty($proxy_host) {
         notify { 'Setting proxy_host will have no effect on agent6 please use agent6_extra_options to set your proxy': }
@@ -610,11 +639,21 @@ class datadog_agent(
           'custom_sensitive_words' => $custom_sensitive_words,
         },
         'logs_enabled' => $logs_enabled,
+    }
+    if $logs_open_files_limit {
+      $logs_base_config = {
+        'logs_config' => {
+          'container_collect_all' => $container_collect_all,
+          'open_files_limit' => $logs_open_files_limit
+        },
+      }
+    } else {
+      $logs_base_config = {
         'logs_config' => {
           'container_collect_all' => $container_collect_all,
         },
+      }
     }
-
     if $host != '' {
         $host_config = {
           'hostname' => $host,
@@ -647,12 +686,23 @@ class datadog_agent(
     } else {
         $statsd_forward_config = {}
     }
+
+    if $additional_checksd {
+        $additional_checksd_config = {
+          'additional_checksd' => $additional_checksd,
+        }
+    } else {
+        $additional_checksd_config = {}
+    }
+
     $extra_config = deep_merge(
             $base_extra_config,
+            $logs_base_config,
             $agent6_extra_options,
             $apm_analyzed_span_config,
             $statsd_forward_config,
-            $host_config)
+            $host_config,
+            $additional_checksd_config)
 
     file { $conf6_dir:
       ensure  => directory,
@@ -675,7 +725,7 @@ class datadog_agent(
       'hostname_fqdn' => $hostname_fqdn,
       'collect_ec2_tags' => $collect_ec2_tags,
       'collect_gce_tags' => $collect_gce_tags,
-      'conf_path' => $datadog_agent::params::conf6_dir,
+      'confd_path' => $conf6_dir,
       'enable_metadata_collection' => $collect_instance_metadata,
       'dogstatsd_port' => $dogstatsd_port,
       'dogstatsd_socket' => $dogstatsd_socket,
@@ -685,21 +735,40 @@ class datadog_agent(
       'log_to_syslog' => $log_to_syslog,
       'log_to_console' => $log_to_console,
       'tags' => unique(flatten(union($_local_tags, $_facts_tags))),
-      'additional_checksd' => $additional_checksd,
     }
 
     $agent_config = deep_merge($_agent_config, $extra_config)
 
-    file { '/etc/datadog-agent/datadog.yaml':
-      owner   => 'dd-agent',
-      group   => 'dd-agent',
-      mode    => '0640',
-      content => template('datadog_agent/datadog6.yaml.erb'),
-      notify  => Service[$datadog_agent::params::service_name],
-      require => File['/etc/datadog-agent'],
-    }
-  }
 
+    if ($::operatingsystem == 'Windows') {
+
+      file { 'C:/ProgramData/Datadog':
+        ensure   => directory
+      }
+
+      file { 'C:/ProgramData/Datadog/datadog.yaml':
+        owner   => $dd_user,
+        group   => 'S-1-5-32-544', #Administrators
+        mode    => '0660',
+        content => template('datadog_agent/datadog6.yaml.erb'),
+        notify  => Service[$datadog_agent::params::service_name],
+        require => File['C:/ProgramData/Datadog'],
+      }
+
+    } else {
+
+      file { '/etc/datadog-agent/datadog.yaml':
+        owner   => $dd_user,
+        group   => 'dd-agent',
+        mode    => '0640',
+        content => template('datadog_agent/datadog6.yaml.erb'),
+        notify  => Service[$datadog_agent::params::service_name],
+        require => File['/etc/datadog-agent'],
+      }
+
+    }
+
+  }
 
   if $puppet_run_reports {
     class { 'datadog_agent::reports':
@@ -713,4 +782,5 @@ class datadog_agent(
   }
 
   create_resources('datadog_agent::integration', $local_integrations)
+
 }

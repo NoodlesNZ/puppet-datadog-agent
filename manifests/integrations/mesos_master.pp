@@ -25,20 +25,20 @@ class datadog_agent::integrations::mesos_master(
       ensure  => directory,
       owner   => $datadog_agent::params::dd_user,
       group   => $datadog_agent::params::dd_group,
-      mode    => '0755',
+      mode    => $datadog_agent::params::permissions_directory,
       require => Package[$datadog_agent::params::package_name],
       notify  => Service[$datadog_agent::params::service_name]
     }
     $dst = "${dst_dir}/conf.yaml"
   } else {
-    $dst = "${datadog_agent::conf_dir}/mesos.yaml"
+    $dst = "${datadog_agent::conf5_dir}/mesos.yaml"
   }
 
   file { $dst:
     ensure => 'absent'
   }
 
-  $legacy_dst_master = "${datadog_agent::conf_dir}/mesos_master.yaml"
+  $legacy_dst_master = "${datadog_agent::conf5_dir}/mesos_master.yaml"
   if !$::datadog_agent::agent5_enable {
     $dst_master_dir = "${datadog_agent::conf6_dir}/mesos_master.d"
     file { $legacy_dst_master:
@@ -49,7 +49,7 @@ class datadog_agent::integrations::mesos_master(
       ensure  => directory,
       owner   => $datadog_agent::params::dd_user,
       group   => $datadog_agent::params::dd_group,
-      mode    => '0755',
+      mode    => $datadog_agent::params::permissions_directory,
       require => Package[$datadog_agent::params::package_name],
       notify  => Service[$datadog_agent::params::service_name]
     }
@@ -62,7 +62,7 @@ class datadog_agent::integrations::mesos_master(
     ensure  => file,
     owner   => $datadog_agent::params::dd_user,
     group   => $datadog_agent::params::dd_group,
-    mode    => '0644',
+    mode    => $datadog_agent::params::permissions_file,
     content => template('datadog_agent/agent-conf.d/mesos_master.yaml.erb'),
     require => Package[$datadog_agent::params::package_name],
     notify  => Service[$datadog_agent::params::service_name]

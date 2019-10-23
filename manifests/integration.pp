@@ -18,18 +18,18 @@ define datadog_agent::integration (
       ensure => directory,
       owner  => $datadog_agent::dd_user,
       group  => $datadog_agent::dd_group,
-      mode   => '0755',
+      mode   => $datadog_agent::params::permissions_directory,
       before => File[$dst]
     }
   } else {
-    $dst = "${datadog_agent::conf_dir}/${integration}.yaml"
+    $dst = "${datadog_agent::conf5_dir}/${integration}.yaml"
   }
 
   file { $dst:
     ensure  => file,
     owner   => $datadog_agent::dd_user,
     group   => $datadog_agent::dd_group,
-    mode    => '0644',
+    mode    => $datadog_agent::params::permissions_file,
     content => to_instances_yaml($init_config, $instances, $logs),
     notify  => Service[$datadog_agent::service_name]
   }

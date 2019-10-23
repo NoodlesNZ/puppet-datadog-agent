@@ -9,7 +9,7 @@
 class datadog_agent::integrations::system_core inherits datadog_agent::params {
   include datadog_agent
 
-  $legacy_dst = "${datadog_agent::conf_dir}/system_core.yaml"
+  $legacy_dst = "${datadog_agent::conf5_dir}/system_core.yaml"
   if !$::datadog_agent::agent5_enable {
     $dst_dir = "${datadog_agent::conf6_dir}/system_core.d"
     file { $legacy_dst:
@@ -20,7 +20,7 @@ class datadog_agent::integrations::system_core inherits datadog_agent::params {
       ensure  => directory,
       owner   => $datadog_agent::params::dd_user,
       group   => $datadog_agent::params::dd_group,
-      mode    => '0755',
+      mode    => $datadog_agent::params::permissions_directory,
       require => Package[$datadog_agent::params::package_name],
       notify  => Service[$datadog_agent::params::service_name]
     }
@@ -33,7 +33,7 @@ class datadog_agent::integrations::system_core inherits datadog_agent::params {
       ensure  => file,
       owner   => $datadog_agent::params::dd_user,
       group   => $datadog_agent::params::dd_group,
-      mode    => '0644',
+      mode    => $datadog_agent::params::permissions_file,
       content => template('datadog_agent/agent-conf.d/system_core.yaml.erb'),
       require => Package[$datadog_agent::params::package_name],
       notify  => Service[$datadog_agent::params::service_name]

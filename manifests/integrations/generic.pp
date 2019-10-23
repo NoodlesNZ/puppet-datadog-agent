@@ -25,7 +25,7 @@ class datadog_agent::integrations::generic(
   validate_legacy('Optional[String]', 'validate_string', $integration_name)
   validate_legacy('Optional[String]', 'validate_string', $integration_contents)
 
-  $legacy_dst = "${datadog_agent::conf_dir}/${integration_name}.yaml"
+  $legacy_dst = "${datadog_agent::conf5_dir}/${integration_name}.yaml"
   if !$::datadog_agent::agent5_enable {
     $dst_dir = "${datadog_agent::conf6_dir}/${integration_name}.d"
     file { $legacy_dst:
@@ -36,7 +36,7 @@ class datadog_agent::integrations::generic(
       ensure  => directory,
       owner   => $datadog_agent::params::dd_user,
       group   => $datadog_agent::params::dd_group,
-      mode    => '0755',
+      mode    => $datadog_agent::params::permissions_directory,
       require => Package[$datadog_agent::params::package_name],
       notify  => Service[$datadog_agent::params::service_name]
     }
@@ -49,7 +49,7 @@ class datadog_agent::integrations::generic(
     ensure  => file,
     owner   => $datadog_agent::params::dd_user,
     group   => $datadog_agent::params::dd_group,
-    mode    => '0600',
+    mode    => $datadog_agent::params::permissions_protected_file,
     content => $integration_contents,
     require => Package[$datadog_agent::params::package_name],
     notify  => Service[$datadog_agent::params::service_name]

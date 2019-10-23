@@ -32,7 +32,7 @@ class datadog_agent::integrations::kubernetes(
 ) inherits datadog_agent::params {
   include datadog_agent
 
-  $legacy_dst = "${datadog_agent::conf_dir}/kubernetes.yaml"
+  $legacy_dst = "${datadog_agent::conf5_dir}/kubernetes.yaml"
   if !$::datadog_agent::agent5_enable {
     $dst_dir = "${datadog_agent::conf6_dir}/kubernetes.d"
     file { $legacy_dst:
@@ -43,7 +43,7 @@ class datadog_agent::integrations::kubernetes(
       ensure  => directory,
       owner   => $datadog_agent::params::dd_user,
       group   => $datadog_agent::params::dd_group,
-      mode    => '0755',
+      mode    => $datadog_agent::params::permissions_directory,
       require => Package[$datadog_agent::params::package_name],
       notify  => Service[$datadog_agent::params::service_name]
     }
@@ -56,7 +56,7 @@ class datadog_agent::integrations::kubernetes(
     ensure  => file,
     owner   => $datadog_agent::params::dd_user,
     group   => $datadog_agent::params::dd_group,
-    mode    => '0644',
+    mode    => $datadog_agent::params::permissions_file,
     require => Package[$datadog_agent::params::package_name],
     notify  => Service[$datadog_agent::params::service_name],
     content => template('datadog_agent/agent-conf.d/kubernetes.yaml.erb'),

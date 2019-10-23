@@ -40,7 +40,7 @@ class datadog_agent::integrations::apache (
   validate_legacy('Array', 'validate_array', $tags)
   validate_legacy('Boolean', 'validate_bool', $disable_ssl_validation)
 
-  $legacy_dst = "${datadog_agent::conf_dir}/apache.yaml"
+  $legacy_dst = "${datadog_agent::conf5_dir}/apache.yaml"
   if !$::datadog_agent::agent5_enable {
     $dst_dir = "${datadog_agent::conf6_dir}/apache.d"
     file { $legacy_dst:
@@ -51,7 +51,7 @@ class datadog_agent::integrations::apache (
       ensure  => directory,
       owner   => $datadog_agent::params::dd_user,
       group   => $datadog_agent::params::dd_group,
-      mode    => '0755',
+      mode    => $datadog_agent::params::permissions_directory,
       require => Package[$datadog_agent::params::package_name],
       notify  => Service[$datadog_agent::params::service_name]
     }
@@ -64,7 +64,7 @@ class datadog_agent::integrations::apache (
     ensure  => file,
     owner   => $datadog_agent::params::dd_user,
     group   => $datadog_agent::params::dd_group,
-    mode    => '0600',
+    mode    => $datadog_agent::params::permissions_protected_file,
     content => template('datadog_agent/agent-conf.d/apache.yaml.erb'),
     require => Package[$datadog_agent::params::package_name],
     notify  => Service[$datadog_agent::params::service_name]
