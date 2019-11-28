@@ -1,6 +1,6 @@
 {
   "name": "datadog-datadog_agent",
-  "version": "2.8.0",
+  "version": "2.9.0",
   "author": "James Turnbull (<james@lovedthanlost.net>) and Rob Terhaar (<rob@atlanticdynamic>) for Datadog Inc.",
   "summary": "Install the Datadog monitoring agent and report Puppet runs to Datadog",
   "license": "Apache-2.0",
@@ -18,6 +18,10 @@
       "operatingsystemrelease": ["6", "7"]
     },
     {
+      "operatingsystem": "OracleLinux",
+      "operatingsystemrelease": ["6", "7"]
+    },
+    {
       "operatingsystem": "Scientific",
       "operatingsystemrelease": ["6", "7"]
     },
@@ -32,6 +36,10 @@
     {
       "operatingsystem": "Ubuntu",
       "operatingsystemrelease": ["14.04", "16.04", "17.04", "17.10", "18.04", "18.10"]
+    },
+    {
+      "operatingsystem": "Windows",
+      "operatingsystemrelease": [ "Server 2008 R2", "Server 2012", "Server 2012 R2", "Server 2016", "Server 2019", "7", "8", "10" ]
     }
   ],
   "requirements": [
@@ -47,7 +55,7 @@
   "dependencies": [
     {
       "name": "puppetlabs/stdlib",
-      "version_requirement": ">=4.24.0 <6.0.0"
+      "version_requirement": ">=4.24.0 <7.0.0"
     },
     {
       "name": "puppetlabs/ruby",
@@ -55,11 +63,11 @@
     },
     {
       "name": "puppetlabs/concat",
-      "version_requirement": ">=4.0.0 <6.0.0"
+      "version_requirement": ">=4.0.0 <7.0.0"
     },
     {
       "name": "puppetlabs/apt",
-      "version_requirement": ">=4.4.0 <=6.0.0"
+      "version_requirement": ">=4.4.0 <8.0.0"
     },
     {
       "name": "puppetlabs/puppetserver_gem",

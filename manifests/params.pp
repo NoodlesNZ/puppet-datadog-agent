@@ -40,6 +40,7 @@ class datadog_agent::params {
       $dd_user                    = 'dd-agent'
       $dd_group                   = 'root'
       $service_name               = 'datadog-agent'
+      $sysprobe_service_name      = 'datadog-agent-sysprobe'
       $agent6_log_file            = '/var/log/datadog/agent.log'
       $package_name               = 'datadog-agent'
       $permissions_directory      = '0755'
@@ -47,7 +48,7 @@ class datadog_agent::params {
       $permissions_protected_file = '0600'
       $agent_binary               = '/opt/datadog-agent/bin/agent/agent'
     }
-    'RedHat','CentOS','Fedora','Amazon','Scientific' : {
+    'RedHat','CentOS','Fedora','Amazon','Scientific','OracleLinux' : {
       $rubydev_package            = 'ruby-devel'
       $agent5_default_repo        = "https://yum.datadoghq.com/rpm/${::architecture}/"
       $agent6_default_repo        = "https://yum.datadoghq.com/stable/6/${::architecture}/"
@@ -56,6 +57,7 @@ class datadog_agent::params {
       $dd_user                    = 'dd-agent'
       $dd_group                   = 'root'
       $service_name               = 'datadog-agent'
+      $sysprobe_service_name      = 'datadog-agent-sysprobe'
       $agent6_log_file            = '/var/log/datadog/agent.log'
       $package_name               = 'datadog-agent'
       $permissions_directory      = '0755'
@@ -65,7 +67,7 @@ class datadog_agent::params {
     }
     'Windows': {
       $agent5_default_repo        = '<agent 5 is not supported by this module on windows>' # Param in init.pp so needs to be defined, but not used on Windows
-      $agent6_default_repo        = "https://s3.amazonaws.com/ddagent-windows-stable/datadog-agent-6-${agent_version}.amd64.msi"
+      $agent6_default_repo        = 'https://s3.amazonaws.com/ddagent-windows-stable/'
       $conf5_dir                   = 'C:/ProgramData/Datadog/agent5' # Not a real path, but integrations use it to ensure => absent so it needs to be a valid path
       $conf6_dir                  = 'C:/ProgramData/Datadog/conf.d'
       $dd_user                    = 'ddagentuser'
