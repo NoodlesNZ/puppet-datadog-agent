@@ -1,4 +1,3 @@
-include datadog_agent::params
 class datadog_agent::system_probe(
   Boolean $enabled = false,
   Optional[String] $log_file = undef,
@@ -11,7 +10,7 @@ class datadog_agent::system_probe(
 
   if $::operatingsystem == 'Windows' {
     # Datadog does not currently support Windows and macOS platforms for Network Performance Monitoring
-    return()
+    fail('Network performance monitoring is only supported on Linux.')
   }
 
   if $service_provider {
@@ -32,7 +31,7 @@ class datadog_agent::system_probe(
       require   => Package[$datadog_agent::params::package_name],
     }
   }
-  
+
   $sysprobe_config = {
     'system_probe_config' => {
       'enabled' => $enabled,
